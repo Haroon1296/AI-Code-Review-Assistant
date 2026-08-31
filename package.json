@@ -1,0 +1,38 @@
+{
+  "name": "ai-code-review-assistant",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-powered code review that evaluates branch changes against the existing repository's architecture and conventions.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev:web": "npm run dev -w @acra/web",
+    "dev:api": "npm run dev -w @acra/api",
+    "dev:worker": "npm run dev:worker -w @acra/api",
+    "build:deps": "npm run build -w @acra/types -w @acra/shared",
+    "build": "npm run build:deps && npm run build -w @acra/api -w @acra/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run build:deps && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:deps && npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @acra/web --if-present",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
+    "prisma": "^5.19.1",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.69.0"
+  }
+}

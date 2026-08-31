@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id                   String   @id @default(cuid())
+  githubId             Int      @unique
+  githubLogin          String
+  name                 String?
+  avatarUrl            String?
+  email                String?
+
+  // GitHub OAuth access token, encrypted at rest (AES-256-GCM). Never logged,
+  // never sent to the frontend. See apps/api/src/common/crypto.ts.
+  encryptedAccessToken String
+  tokenIv              String
+  tokenAuthTag         String
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  sessions             Session[]
+  repositoryConnections RepositoryConnection[]
+  reviews              Review[]
+  reviewSetting        ReviewSetting?
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Repositories
+// ---------------------------------------------------------------------------
+
+model Repository {
+  id             String   @id @default(cuid())
+  githubRepoId   Int      @unique
+  owner          String
+  name           String
+  fullName       String
+  defaultBranch  String
+  private        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  connections          RepositoryConnection[]
+  architectureSnapshots ArchitectureSnapshot[]
+  reviews              Review[]
+
+  @@map("repositories")
+}
+
+model RepositoryConnection {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, repositoryId])
+  @@map("repository_connections")
+}
+
+// ---------------------------------------------------------------------------
+// Architecture analysis
+// ---------------------------------------------------------------------------
+
+enum ArchitectureConfidence {
+  low
+  medium
+  high
+}
+
+model ArchitectureSnapshot {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  repository     Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  commitSha      String
+
+  language       String?
+  framework      String?
+  packageManager String?
+  entryPoints    String[]
+
+  // Condensed folder-structure summary (top levels + counts), not a full file dump.
+  structureJson   Json
+  // Detected pattern list: [{ name, detected, evidencePaths }]
+  patternsJson    Json
+  // Naming/testing/response-shape conventions inferred from the repo.
+  conventionsJson Json
+  // Inferred call-chain layering, e.g. ["Controller","Service","Repository","Model"].
+  layering        String[]
+
+  confidence     ArchitectureConfidence @default(low)
+  createdAt      DateTime @default(now())
+
+  reviews        Review[]
+
+  @@unique([repositoryId, commitSha])
+  @@map("architecture_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews
+// ---------------------------------------------------------------------------
+
+enum ReviewStatus {
+  pending
+  analyzing
+  reviewing
+  completed
+  failed
+}
+
+model Review {
+  id                     String   @id @default(cuid())
+  repositoryId           String
+  repository             Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  userId                 String
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  architectureSnapshotId String?
+  architectureSnapshot   ArchitectureSnapshot? @relation(fields: [architectureSnapshotId], references: [id])
+
+  baseBranch  String
+  headBranch  String
+  baseSha     String?
+  headSha     String?
+
+  status      ReviewStatus @default(pending)
+  summary     String?
+  score               Int?
+  architectureScore   Int?
+  securityScore       Int?
+  qualityScore        Int?
+  performanceScore    Int?
+  testingScore        Int?
+
+  model            String?
+  inputTokens      Int?
+  outputTokens     Int?
+  estimatedCostUsd Float?
+
+  errorMessage String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  files  ReviewFile[]
+  issues ReviewIssue[]
+
+  @@index([repositoryId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+enum FileChangeStatus {
+  added
+  modified
+  removed
+  renamed
+}
+
+model ReviewFile {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  filePath  String
+  status    FileChangeStatus
+  additions Int      @default(0)
+  deletions Int      @default(0)
+  // Unified diff hunk only — never the full file contents.
+  patch     String?
+
+  @@index([reviewId])
+  @@map("review_files")
+}
+
+enum IssueSeverity {
+  critical
+  high
+  medium
+  low
+  info
+}
+
+enum IssueCategory {
+  bug
+  security
+  performance
+  architecture
+  quality
+  maintainability
+  testing
+  style
+}
+
+model ReviewIssue {
+  id         String        @id @default(cuid())
+  reviewId   String
+  review     Review        @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  severity   IssueSeverity
+  category   IssueCategory
+  file       String?
+  line       Int?
+  title      String
+  message    String
+  reason     String
+  suggestion String
+  createdAt  DateTime      @default(now())
+
+  @@index([reviewId])
+  @@map("review_issues")
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+model ReviewSetting {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  excludedPatterns String[]
+  maxFiles         Int      @default(40)
+  maxFileSizeKb    Int      @default(64)
+  maxContextTokens Int      @default(12000)
+  model            String   @default("gpt-4.1-mini")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("review_settings")
+}
