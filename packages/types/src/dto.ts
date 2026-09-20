@@ -101,11 +101,18 @@ export type ArchitectureSnapshotDto = z.infer<typeof ArchitectureSnapshotDtoSche
 
 // --- Reviews ---
 
-export const CreateReviewRequestSchema = z.object({
-  repositoryId: z.string().min(1),
-  baseBranch: z.string().min(1),
-  headBranch: z.string().min(1),
-});
+export const CreateReviewRequestSchema = z
+  .object({
+    repositoryId: z.string().min(1),
+    baseBranch: z.string().min(1).optional(),
+    headBranch: z.string().min(1),
+    /** Review the entire branch as one diff (against git's empty tree) instead of against a base branch. */
+    wholeBranch: z.boolean().optional(),
+  })
+  .refine((data) => !(data.wholeBranch && data.baseBranch), {
+    message: 'baseBranch cannot be set when wholeBranch is true',
+    path: ['baseBranch'],
+  });
 export type CreateReviewRequest = z.infer<typeof CreateReviewRequestSchema>;
 
 export const ReviewSummaryDtoSchema = z.object({

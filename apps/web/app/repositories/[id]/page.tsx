@@ -15,6 +15,7 @@ function RepositoryDetailView() {
   const [branches, setBranches] = useState<BranchSummary[] | null>(null);
   const [baseBranch, setBaseBranch] = useState('');
   const [headBranch, setHeadBranch] = useState('');
+  const [wholeBranch, setWholeBranch] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,16 +27,22 @@ function RepositoryDetailView() {
     apiFetch<BranchSummary[]>(`/api/repositories/${id}/branches`).then(setBranches);
   }, [id]);
 
-  const sameBranchSelected = Boolean(headBranch) && headBranch === baseBranch;
+  const sameBranchSelected = !wholeBranch && Boolean(headBranch) && headBranch === baseBranch;
+  const canSubmit =
+    Boolean(headBranch) && (wholeBranch || (Boolean(baseBranch) && !sameBranchSelected));
 
   async function handleStartReview() {
-    if (!baseBranch || !headBranch || sameBranchSelected) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
       const review = await apiFetch<{ id: string }>('/api/reviews', {
         method: 'POST',
-        body: JSON.stringify({ repositoryId: id, baseBranch, headBranch }),
+        body: JSON.stringify(
+          wholeBranch
+            ? { repositoryId: id, headBranch, wholeBranch: true }
+            : { repositoryId: id, baseBranch, headBranch },
+        ),
       });
       router.push(`/reviews/${review.id}`);
     } catch (err) {
@@ -51,29 +58,43 @@ function RepositoryDetailView() {
     <div className="max-w-xl space-y-6">
       <div>
         <h1 className="text-xl font-semibold">{repository.fullName}</h1>
-        <Link href={`/repositories/${id}/architecture`} className="text-sm text-blue-400 hover:underline">
+        <Link
+          href={`/repositories/${id}/architecture`}
+          className="text-sm text-blue-400 hover:underline"
+        >
           View architecture analysis →
         </Link>
       </div>
 
       <div className="space-y-4 rounded-lg border border-border bg-panel p-5">
-        <div>
-          <label htmlFor="base-branch" className="mb-1 block text-sm text-gray-400">
-            Base branch
-          </label>
-          <select
-            id="base-branch"
-            value={baseBranch}
-            onChange={(e) => setBaseBranch(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-          >
-            {branches.map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-400">
+          <input
+            type="checkbox"
+            checked={wholeBranch}
+            onChange={(e) => setWholeBranch(e.target.checked)}
+          />
+          Review whole branch (no base branch needed)
+        </label>
+
+        {!wholeBranch && (
+          <div>
+            <label htmlFor="base-branch" className="mb-1 block text-sm text-gray-400">
+              Base branch
+            </label>
+            <select
+              id="base-branch"
+              value={baseBranch}
+              onChange={(e) => setBaseBranch(e.target.value)}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            >
+              {branches.map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label htmlFor="head-branch" className="mb-1 block text-sm text-gray-400">
@@ -103,7 +124,7 @@ function RepositoryDetailView() {
 
         <button
           onClick={handleStartReview}
-          disabled={submitting || !headBranch || sameBranchSelected}
+          disabled={submitting || !canSubmit}
           className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
           {submitting ? 'Starting review...' : 'Start Review'}

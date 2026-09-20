@@ -1,26 +1,48 @@
 import type { Review } from '@prisma/client';
-import type {
-  CreateReviewRequest,
-  IssueCategory,
-  IssueSeverity,
-  ReviewStatus,
-} from '@acra/types';
+import type { CreateReviewRequest, IssueCategory, IssueSeverity, ReviewStatus } from '@acra/types';
 import { prisma } from '../../db/prisma.js';
 import { badRequest, notFound } from '../../common/errors.js';
 import { createGithubServiceForUser } from '../auth/auth.service.js';
 import { requireConnectedRepository } from '../repositories/repositories.service.js';
 import { enqueueReview } from '../../queue/queue.js';
+import { EMPTY_TREE_SHA, WHOLE_BRANCH_BASE_LABEL } from './reviews.constants.js';
 
 export async function createReview(userId: string, input: CreateReviewRequest): Promise<Review> {
-  if (input.baseBranch === input.headBranch) {
-    throw badRequest('Base and feature branch must be different', 'SAME_BRANCH');
-  }
-
   const repository = await requireConnectedRepository(userId, input.repositoryId);
   const github = await createGithubServiceForUser(userId);
 
+  if (input.wholeBranch) {
+    const headSha = await github
+      .getBranchHeadSha(repository.owner, repository.name, input.headBranch)
+      .catch(() => null);
+    if (!headSha) {
+      throw badRequest('The branch does not exist on this repository', 'BRANCH_NOT_FOUND');
+    }
+
+    const review = await prisma.review.create({
+      data: {
+        repositoryId: repository.id,
+        userId,
+        baseBranch: WHOLE_BRANCH_BASE_LABEL,
+        headBranch: input.headBranch,
+        baseSha: EMPTY_TREE_SHA,
+        headSha,
+        status: 'pending',
+      },
+    });
+
+    await enqueueReview(review.id);
+    return review;
+  }
+
+  const baseBranch = input.baseBranch ?? repository.defaultBranch;
+
+  if (baseBranch === input.headBranch) {
+    throw badRequest('Base and feature branch must be different', 'SAME_BRANCH');
+  }
+
   const [baseSha, headSha] = await Promise.all([
-    github.getBranchHeadSha(repository.owner, repository.name, input.baseBranch).catch(() => null),
+    github.getBranchHeadSha(repository.owner, repository.name, baseBranch).catch(() => null),
     github.getBranchHeadSha(repository.owner, repository.name, input.headBranch).catch(() => null),
   ]);
 
@@ -32,7 +54,7 @@ export async function createReview(userId: string, input: CreateReviewRequest): 
     data: {
       repositoryId: repository.id,
       userId,
-      baseBranch: input.baseBranch,
+      baseBranch,
       headBranch: input.headBranch,
       baseSha,
       headSha,
