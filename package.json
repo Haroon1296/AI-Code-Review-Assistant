@@ -11,6 +11,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "dev": "concurrently -n api,worker,web -c blue,magenta,green \"npm run dev:api\" \"npm run dev:worker\" \"npm run dev:web\"",
     "dev:web": "npm run dev -w @acra/web",
     "dev:api": "npm run dev -w @acra/api",
     "dev:worker": "npm run dev:worker -w @acra/api",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "concurrently": "^9.0.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.9.0",
