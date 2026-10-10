@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { CreateReviewRequestSchema, IssueCategory, IssueSeverity, ReviewStatus } from '@acra/types';
 import { requireAuth } from '../auth/session.middleware.js';
 import { validate } from '../../common/validate.js';
-import { createReviewRateLimiter } from '../../common/rate-limit.js';
+import { createReviewRateLimiter, postCommentRateLimiter } from '../../common/rate-limit.js';
 import {
   getReview,
   getReviewArchitectureRoute,
@@ -11,6 +11,7 @@ import {
   getReviewIssuesRoute,
   getReviews,
   postReview,
+  postReviewCommentRoute,
 } from './reviews.controller.js';
 
 const listQuerySchema = z.object({
@@ -35,3 +36,4 @@ reviewsRouter.get('/:id', getReview);
 reviewsRouter.get('/:id/issues', validate(issuesQuerySchema, 'query'), getReviewIssuesRoute);
 reviewsRouter.get('/:id/files', getReviewFilesRoute);
 reviewsRouter.get('/:id/architecture', getReviewArchitectureRoute);
+reviewsRouter.post('/:id/post-comment', postCommentRateLimiter, postReviewCommentRoute);

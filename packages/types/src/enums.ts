@@ -24,6 +24,9 @@ export type FileChangeStatus = z.infer<typeof FileChangeStatus>;
 export const ArchitectureConfidence = z.enum(['low', 'medium', 'high']);
 export type ArchitectureConfidence = z.infer<typeof ArchitectureConfidence>;
 
+export const GithubCommentTarget = z.enum(['pull_request', 'commit']);
+export type GithubCommentTarget = z.infer<typeof GithubCommentTarget>;
+
 /** Ordering used for sorting issue lists and applying severity thresholds. */
 export const SEVERITY_ORDER: Record<IssueSeverity, number> = {
   critical: 0,

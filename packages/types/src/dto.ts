@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ArchitectureConfidence,
   FileChangeStatus,
+  GithubCommentTarget,
   IssueCategory,
   IssueSeverity,
   ReviewStatus,
@@ -149,11 +150,23 @@ export const ReviewDetailDtoSchema = z.object({
   outputTokens: z.number().nullable(),
   estimatedCostUsd: z.number().nullable(),
   errorMessage: z.string().nullable(),
+  githubCommentId: z.number().nullable(),
+  githubCommentUrl: z.string().nullable(),
+  githubCommentTarget: GithubCommentTarget.nullable(),
+  githubCommentPostedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   completedAt: z.string().nullable(),
 });
 export type ReviewDetailDto = z.infer<typeof ReviewDetailDtoSchema>;
+
+export const PostReviewCommentResponseSchema = z.object({
+  githubCommentId: z.number(),
+  githubCommentUrl: z.string(),
+  githubCommentTarget: GithubCommentTarget,
+  githubCommentPostedAt: z.string(),
+});
+export type PostReviewCommentResponse = z.infer<typeof PostReviewCommentResponseSchema>;
 
 export const ReviewIssueDtoSchema = z.object({
   id: z.string(),

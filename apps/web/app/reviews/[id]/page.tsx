@@ -2,13 +2,27 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import type { IssueCategory, IssueSeverity, ReviewDetailDto, ReviewFileDto, ReviewIssueDto } from '@acra/types';
+import type {
+  IssueCategory,
+  IssueSeverity,
+  PostReviewCommentResponse,
+  ReviewDetailDto,
+  ReviewFileDto,
+  ReviewIssueDto,
+} from '@acra/types';
 import { AuthGuard } from '../../../components/auth-guard';
 import { CategoryBadge, ScoreGauge, SeverityBadge } from '../../../components/badges';
-import { apiFetch } from '../../../lib/api';
+import { apiFetch, ApiRequestError } from '../../../lib/api';
 
 const IN_PROGRESS_STATUSES = new Set(['pending', 'analyzing', 'reviewing']);
-const SEVERITY_FILTERS: Array<IssueSeverity | 'all'> = ['all', 'critical', 'high', 'medium', 'low', 'info'];
+const SEVERITY_FILTERS: Array<IssueSeverity | 'all'> = [
+  'all',
+  'critical',
+  'high',
+  'medium',
+  'low',
+  'info',
+];
 const CATEGORY_FILTERS: Array<IssueCategory | 'all'> = [
   'all',
   'architecture',
@@ -29,6 +43,8 @@ function ReviewDashboard() {
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<IssueCategory | 'all'>('all');
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
@@ -53,6 +69,23 @@ function ReviewDashboard() {
     return () => clearInterval(pollRef.current);
   }, [id]);
 
+  async function handlePostComment() {
+    setPosting(true);
+    setPostError(null);
+    try {
+      const result = await apiFetch<PostReviewCommentResponse>(`/api/reviews/${id}/post-comment`, {
+        method: 'POST',
+      });
+      setReview((prev) => (prev ? { ...prev, ...result } : prev));
+    } catch (err) {
+      setPostError(
+        err instanceof ApiRequestError ? err.message : 'Failed to post comment to GitHub',
+      );
+    } finally {
+      setPosting(false);
+    }
+  }
+
   if (!review) return <p className="text-gray-400">Loading review...</p>;
 
   if (IN_PROGRESS_STATUSES.has(review.status)) {
@@ -73,7 +106,9 @@ function ReviewDashboard() {
     return (
       <div className="max-w-xl rounded-lg border border-red-500/30 bg-red-500/10 p-6">
         <p className="font-medium text-red-400">Review failed</p>
-        <p className="mt-2 text-sm text-gray-400">{review.errorMessage ?? 'An unknown error occurred.'}</p>
+        <p className="mt-2 text-sm text-gray-400">
+          {review.errorMessage ?? 'An unknown error occurred.'}
+        </p>
       </div>
     );
   }
@@ -102,6 +137,35 @@ function ReviewDashboard() {
         <ScoreGauge label="Testing" score={review.testingScore} />
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-panel p-4">
+        <button
+          onClick={handlePostComment}
+          disabled={posting}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        >
+          {posting
+            ? 'Posting...'
+            : review.githubCommentUrl
+              ? 'Update GitHub comment'
+              : 'Post to GitHub'}
+        </button>
+        {review.githubCommentUrl && (
+          <a
+            href={review.githubCommentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-blue-400 hover:underline"
+          >
+            Posted
+            {review.githubCommentTarget === 'pull_request'
+              ? ' to pull request'
+              : ' as commit comment'}{' '}
+            →
+          </a>
+        )}
+        {postError && <p className="w-full text-sm text-red-400">{postError}</p>}
+      </div>
+
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           {SEVERITY_FILTERS.map((s) => (
@@ -109,7 +173,9 @@ function ReviewDashboard() {
               key={s}
               onClick={() => setSeverityFilter(s)}
               className={`rounded-full border px-3 py-1 text-xs capitalize ${
-                severityFilter === s ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-border text-gray-400'
+                severityFilter === s
+                  ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                  : 'border-border text-gray-400'
               }`}
             >
               {s}
@@ -121,7 +187,9 @@ function ReviewDashboard() {
               key={c}
               onClick={() => setCategoryFilter(c)}
               className={`rounded-full border px-3 py-1 text-xs capitalize ${
-                categoryFilter === c ? 'border-blue-500 bg-blue-500/20 text-blue-300' : 'border-border text-gray-400'
+                categoryFilter === c
+                  ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                  : 'border-border text-gray-400'
               }`}
             >
               {c}
@@ -154,12 +222,16 @@ function ReviewDashboard() {
               </p>
             </div>
           ))}
-          {filteredIssues.length === 0 && <p className="text-sm text-gray-500">No issues match this filter.</p>}
+          {filteredIssues.length === 0 && (
+            <p className="text-sm text-gray-500">No issues match this filter.</p>
+          )}
         </div>
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">Changed files</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
+          Changed files
+        </h2>
         <div className="divide-y divide-border rounded-lg border border-border bg-panel">
           {(files ?? []).map((file) => (
             <div key={file.id}>
@@ -173,7 +245,9 @@ function ReviewDashboard() {
                 </span>
               </button>
               {expandedFile === file.id && file.patch && (
-                <pre className="overflow-x-auto bg-black/40 p-4 text-xs text-gray-300">{file.patch}</pre>
+                <pre className="overflow-x-auto bg-black/40 p-4 text-xs text-gray-300">
+                  {file.patch}
+                </pre>
               )}
             </div>
           ))}

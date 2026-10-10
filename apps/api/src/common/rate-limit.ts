@@ -14,5 +14,16 @@ export const createReviewRateLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: { message: 'Too many reviews requested. Try again later.', code: 'RATE_LIMITED' } },
+  message: {
+    error: { message: 'Too many reviews requested. Try again later.', code: 'RATE_LIMITED' },
+  },
+});
+
+/** Guards against hammering the GitHub API with repeated comment posts. */
+export const postCommentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { message: 'Too many comment posts. Try again later.', code: 'RATE_LIMITED' } },
 });

@@ -46,3 +46,12 @@ export interface GithubCommit {
   authorName: string | null;
   authoredAt: string | null;
 }
+
+export interface GithubPullRequest {
+  number: number;
+}
+
+export interface GithubComment {
+  id: number;
+  url: string;
+}

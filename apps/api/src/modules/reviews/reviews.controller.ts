@@ -9,8 +9,14 @@ import {
   listReviewFiles,
   listReviewIssues,
   listReviewsForUser,
+  postReviewComment,
 } from './reviews.service.js';
-import { toReviewDetailDto, toReviewFileDto, toReviewIssueDto, toReviewSummaryDto } from './reviews.mapper.js';
+import {
+  toReviewDetailDto,
+  toReviewFileDto,
+  toReviewIssueDto,
+  toReviewSummaryDto,
+} from './reviews.mapper.js';
 
 export const postReview = asyncHandler(async (req: Request, res: Response) => {
   const review = await createReview(req.user!.id, req.body);
@@ -50,7 +56,10 @@ export const getReviewIssuesRoute = asyncHandler(async (req: Request, res: Respo
     severity?: Parameters<typeof listReviewIssues>[2]['severity'];
     category?: Parameters<typeof listReviewIssues>[2]['category'];
   };
-  const issues = await listReviewIssues(req.user!.id, req.params.id as string, { severity, category });
+  const issues = await listReviewIssues(req.user!.id, req.params.id as string, {
+    severity,
+    category,
+  });
   res.json(issues.map(toReviewIssueDto));
 });
 
@@ -62,4 +71,14 @@ export const getReviewFilesRoute = asyncHandler(async (req: Request, res: Respon
 export const getReviewArchitectureRoute = asyncHandler(async (req: Request, res: Response) => {
   const snapshot = await getReviewArchitecture(req.user!.id, req.params.id as string);
   res.json(snapshot ? toArchitectureSnapshotDto(snapshot) : null);
+});
+
+export const postReviewCommentRoute = asyncHandler(async (req: Request, res: Response) => {
+  const review = await postReviewComment(req.user!.id, req.params.id as string);
+  res.json({
+    githubCommentId: review.githubCommentId,
+    githubCommentUrl: review.githubCommentUrl,
+    githubCommentTarget: review.githubCommentTarget,
+    githubCommentPostedAt: review.githubCommentPostedAt!.toISOString(),
+  });
 });

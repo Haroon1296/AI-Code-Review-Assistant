@@ -12,12 +12,12 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                   String   @id @default(cuid())
-  githubId             Int      @unique
-  githubLogin          String
-  name                 String?
-  avatarUrl            String?
-  email                String?
+  id          String  @id @default(cuid())
+  githubId    Int     @unique
+  githubLogin String
+  name        String?
+  avatarUrl   String?
+  email       String?
 
   // GitHub OAuth access token, encrypted at rest (AES-256-GCM). Never logged,
   // never sent to the frontend. See apps/api/src/common/crypto.ts.
@@ -25,13 +25,13 @@ model User {
   tokenIv              String
   tokenAuthTag         String
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sessions             Session[]
+  sessions              Session[]
   repositoryConnections RepositoryConnection[]
-  reviews              Review[]
-  reviewSetting        ReviewSetting?
+  reviews               Review[]
+  reviewSetting         ReviewSetting?
 
   @@map("users")
 }
@@ -52,30 +52,30 @@ model Session {
 // ---------------------------------------------------------------------------
 
 model Repository {
-  id             String   @id @default(cuid())
-  githubRepoId   Int      @unique
-  owner          String
-  name           String
-  fullName       String
-  defaultBranch  String
-  private        Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  githubRepoId  Int      @unique
+  owner         String
+  name          String
+  fullName      String
+  defaultBranch String
+  private       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  connections          RepositoryConnection[]
+  connections           RepositoryConnection[]
   architectureSnapshots ArchitectureSnapshot[]
-  reviews              Review[]
+  reviews               Review[]
 
   @@map("repositories")
 }
 
 model RepositoryConnection {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   repositoryId String
   repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
 
   @@unique([userId, repositoryId])
   @@map("repository_connections")
@@ -92,10 +92,10 @@ enum ArchitectureConfidence {
 }
 
 model ArchitectureSnapshot {
-  id             String   @id @default(cuid())
-  repositoryId   String
-  repository     Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  commitSha      String
+  id           String     @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  commitSha    String
 
   language       String?
   framework      String?
@@ -111,10 +111,10 @@ model ArchitectureSnapshot {
   // Inferred call-chain layering, e.g. ["Controller","Service","Repository","Model"].
   layering        String[]
 
-  confidence     ArchitectureConfidence @default(low)
-  createdAt      DateTime @default(now())
+  confidence ArchitectureConfidence @default(low)
+  createdAt  DateTime               @default(now())
 
-  reviews        Review[]
+  reviews Review[]
 
   @@unique([repositoryId, commitSha])
   @@map("architecture_snapshots")
@@ -132,28 +132,33 @@ enum ReviewStatus {
   failed
 }
 
+enum GithubCommentTarget {
+  pull_request
+  commit
+}
+
 model Review {
-  id                     String   @id @default(cuid())
+  id                     String                @id @default(cuid())
   repositoryId           String
-  repository             Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  repository             Repository            @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   userId                 String
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   architectureSnapshotId String?
   architectureSnapshot   ArchitectureSnapshot? @relation(fields: [architectureSnapshotId], references: [id])
 
-  baseBranch  String
-  headBranch  String
-  baseSha     String?
-  headSha     String?
+  baseBranch String
+  headBranch String
+  baseSha    String?
+  headSha    String?
 
-  status      ReviewStatus @default(pending)
-  summary     String?
-  score               Int?
-  architectureScore   Int?
-  securityScore       Int?
-  qualityScore        Int?
-  performanceScore    Int?
-  testingScore        Int?
+  status            ReviewStatus @default(pending)
+  summary           String?
+  score             Int?
+  architectureScore Int?
+  securityScore     Int?
+  qualityScore      Int?
+  performanceScore  Int?
+  testingScore      Int?
 
   model            String?
   inputTokens      Int?
@@ -162,8 +167,18 @@ model Review {
 
   errorMessage String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Set once the review's issue list has been posted to GitHub as a comment
+  // (on the branch's open pull request if one exists, else on headSha).
+  // githubCommentPrNumber records which PR it landed on, so a later re-post
+  // doesn't edit a comment left on a since-closed PR.
+  githubCommentId       Int?
+  githubCommentUrl      String?
+  githubCommentTarget   GithubCommentTarget?
+  githubCommentPrNumber Int?
+  githubCommentPostedAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   completedAt DateTime?
 
   files  ReviewFile[]
@@ -182,13 +197,13 @@ enum FileChangeStatus {
 }
 
 model ReviewFile {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   reviewId  String
-  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  review    Review           @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   filePath  String
   status    FileChangeStatus
-  additions Int      @default(0)
-  deletions Int      @default(0)
+  additions Int              @default(0)
+  deletions Int              @default(0)
   // Unified diff hunk only — never the full file contents.
   patch     String?
 
@@ -238,9 +253,9 @@ model ReviewIssue {
 // ---------------------------------------------------------------------------
 
 model ReviewSetting {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   excludedPatterns String[]
   maxFiles         Int      @default(40)

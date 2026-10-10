@@ -8,8 +8,10 @@ import type {
 } from '../auth/auth.types.js';
 import type {
   GithubBranch,
+  GithubComment,
   GithubCommit,
   GithubCompareResult,
+  GithubPullRequest,
   GithubRepo,
   GithubTree,
 } from './github.types.js';
@@ -103,25 +105,46 @@ export class GithubService {
 
   /** Recursive tree fetch in a single call. GitHub truncates trees over ~100k entries/7MB — callers must check `truncated`. */
   async getTree(owner: string, repo: string, sha: string): Promise<GithubTree> {
-    const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: sha, recursive: '1' });
+    const { data } = await this.octokit.rest.git.getTree({
+      owner,
+      repo,
+      tree_sha: sha,
+      recursive: '1',
+    });
     return {
       truncated: data.truncated,
       entries: data.tree
-        .filter((entry): entry is typeof entry & { path: string; sha: string; type: 'blob' | 'tree' } =>
-          Boolean(entry.path && entry.sha && (entry.type === 'blob' || entry.type === 'tree')),
+        .filter(
+          (entry): entry is typeof entry & { path: string; sha: string; type: 'blob' | 'tree' } =>
+            Boolean(entry.path && entry.sha && (entry.type === 'blob' || entry.type === 'tree')),
         )
         .map((entry) => ({ path: entry.path, type: entry.type, size: entry.size, sha: entry.sha })),
     };
   }
 
-  async getFileContent(owner: string, repo: string, path: string, ref: string): Promise<string | null> {
+  async getFileContent(
+    owner: string,
+    repo: string,
+    path: string,
+    ref: string,
+  ): Promise<string | null> {
     const { data } = await this.octokit.rest.repos.getContent({ owner, repo, path, ref });
     if (Array.isArray(data) || data.type !== 'file' || !data.content) return null;
     return Buffer.from(data.content, data.encoding as BufferEncoding).toString('utf8');
   }
 
-  async listCommits(owner: string, repo: string, sha: string, perPage = 20): Promise<GithubCommit[]> {
-    const { data } = await this.octokit.rest.repos.listCommits({ owner, repo, sha, per_page: perPage });
+  async listCommits(
+    owner: string,
+    repo: string,
+    sha: string,
+    perPage = 20,
+  ): Promise<GithubCommit[]> {
+    const { data } = await this.octokit.rest.repos.listCommits({
+      owner,
+      repo,
+      sha,
+      per_page: perPage,
+    });
     return data.map((commit) => ({
       sha: commit.sha,
       message: commit.commit.message,
@@ -130,7 +153,12 @@ export class GithubService {
     }));
   }
 
-  async compareCommits(owner: string, repo: string, base: string, head: string): Promise<GithubCompareResult> {
+  async compareCommits(
+    owner: string,
+    repo: string,
+    base: string,
+    head: string,
+  ): Promise<GithubCompareResult> {
     const { data } = await this.octokit.rest.repos.compareCommits({ owner, repo, base, head });
     return {
       aheadBy: data.ahead_by,
@@ -144,5 +172,82 @@ export class GithubService {
         patch: file.patch,
       })),
     };
+  }
+
+  /** The first open PR with this branch as its head, or null if there isn't one. */
+  async findOpenPullRequestForBranch(
+    owner: string,
+    repo: string,
+    branch: string,
+  ): Promise<GithubPullRequest | null> {
+    const { data } = await this.octokit.rest.pulls.list({
+      owner,
+      repo,
+      state: 'open',
+      head: `${owner}:${branch}`,
+      per_page: 1,
+    });
+    const pr = data[0];
+    return pr ? { number: pr.number } : null;
+  }
+
+  async createIssueComment(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    body: string,
+  ): Promise<GithubComment> {
+    const { data } = await this.octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body,
+    });
+    return { id: data.id, url: data.html_url };
+  }
+
+  async updateIssueComment(
+    owner: string,
+    repo: string,
+    commentId: number,
+    body: string,
+  ): Promise<GithubComment> {
+    const { data } = await this.octokit.rest.issues.updateComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      body,
+    });
+    return { id: data.id, url: data.html_url };
+  }
+
+  async createCommitComment(
+    owner: string,
+    repo: string,
+    sha: string,
+    body: string,
+  ): Promise<GithubComment> {
+    const { data } = await this.octokit.rest.repos.createCommitComment({
+      owner,
+      repo,
+      commit_sha: sha,
+      body,
+    });
+    return { id: data.id, url: data.html_url };
+  }
+
+  async updateCommitComment(
+    owner: string,
+    repo: string,
+    commentId: number,
+    body: string,
+  ): Promise<GithubComment> {
+    const { data } = await this.octokit.rest.repos.updateCommitComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      body,
+    });
+    return { id: data.id, url: data.html_url };
   }
 }
